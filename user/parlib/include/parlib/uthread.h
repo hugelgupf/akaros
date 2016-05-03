@@ -135,5 +135,6 @@ uth_mutex_t uth_mutex_alloc(void);
 void uth_mutex_free(uth_mutex_t m);
 void uth_mutex_lock(uth_mutex_t m);
 void uth_mutex_unlock(uth_mutex_t m);
+// XXX extend for cond vars
 
 __END_DECLS
