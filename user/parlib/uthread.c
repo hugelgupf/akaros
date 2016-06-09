@@ -5,6 +5,7 @@
 #include <parlib/arch/atomic.h>
 #include <parlib/arch/trap.h>
 #include <parlib/assert.h>
+#include <parlib/debug.h>
 #include <parlib/event.h>
 #include <parlib/spinlock.h>
 #include <parlib/parlib.h>
@@ -16,6 +17,7 @@
  * pthreads, should override sched_ops in its init code. */
 extern struct schedule_ops thread0_2ls_ops;
 struct schedule_ops *sched_ops = &thread0_2ls_ops;
+struct d9_ops d9ops;
 
 __thread struct uthread *current_uthread = 0;
 /* ev_q for all preempt messages (handled here to keep 2LSs from worrying
@@ -237,6 +239,13 @@ void __attribute__((constructor)) uthread_lib_init(void)
 	/* Init the 2LS, which sets up current_uthread, before thread0 lib */
 	uthread_2ls_init(thread0_uth, &thread0_2ls_ops);
 	thread0_lib_init();
+
+	d9ops.read_memory = &d9s_read_memory;
+	d9ops.store_memory = &d9s_store_memory;
+	d9ops.fetch_registers = &d9_fetch_registers;
+	/* Make ourselves available for debugging */
+	d9s_init(&d9ops);
+
 	scp_vcctx_ready();
 	/* Change our blockon from glibc's internal one to the regular one, which
 	 * uses vcore context and works for SCPs (with or without 2LS) and MCPs.
