@@ -1,7 +1,7 @@
 /* Copyright (c) 2011-2014 The Regents of the University of California
+ * Copyright (c) 2016 Google Inc.
  * Barret Rhoden <brho@cs.berkeley.edu>
  * See LICENSE for details. */
-
 #include <parlib/arch/atomic.h>
 #include <parlib/arch/trap.h>
 #include <parlib/assert.h>
@@ -243,6 +243,8 @@ void __attribute__((constructor)) uthread_lib_init(void)
 	d9ops.read_memory = &d9s_read_memory;
 	d9ops.store_memory = &d9s_store_memory;
 	d9ops.fetch_registers = &d9_fetch_registers;
+	d9ops.store_registers = &d9_store_registers;
+	d9ops.resume = &d9s_resume;
 	/* Make ourselves available for debugging */
 	d9s_init(&d9ops);
 
@@ -329,6 +331,8 @@ void uthread_init(struct uthread *new_thread, struct uth_thread_attr *attr)
 	new_thread->notif_disabled_depth = 0;
 
 	uthread_assign_id(new_thread);
+
+	d9s_notify_add_thread(new_thread->id);
 
 	if (attr && attr->want_tls) {
 		/* Get a TLS.  If we already have one, reallocate/refresh it */
@@ -1192,6 +1196,17 @@ static void __uthread_free_tls(struct uthread *uthread)
 {
 	free_tls(uthread->tls_desc);
 	uthread->tls_desc = NULL;
+}
+
+void uthread_apply_all(void (*fn)(struct uthread *))
+{
+	struct uthread *t = NULL;
+
+	spin_pdr_lock(&thread_list_lock);
+	LIST_FOREACH(t, &all_uthreads, entry)
+		fn(t);
+
+	spin_pdr_unlock(&thread_list_lock);
 }
 
 /* TODO(chrisko): hash table instead of list. */
