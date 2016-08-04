@@ -5,7 +5,7 @@ all:
 # TODO: when we clean this up, if we ditch OBJDIR, change the root makefile
 TESTS_DIR = tests
 
-CFLAGS_TESTS += $(CFLAGS_USER) -g
+CFLAGS_TESTS += $(CFLAGS_USER) -g -ggdb -O0
 TESTS_CXXFLAGS += $(CXXFLAGS_USER) -g -std=gnu++11
 
 TESTS_LDLIBS := -lpthread -lvmm -lbenchutil -lm -liplib -lndblib

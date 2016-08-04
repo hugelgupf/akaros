@@ -117,8 +117,13 @@ struct d9_rstorereg {
 } __attribute__((packed));
 
 /* resuming */
+struct d9_tresume_msg {
+	bool singlestep:1;
+} __attribute__((packed));
+
 struct d9_tresume {
 	struct d9_header hdr;
+	struct d9_tresume_msg msg;
 } __attribute__((packed));
 
 struct d9_rresume {
@@ -162,7 +167,7 @@ struct d9_ops {
 	int (*store_memory)(const struct d9_tstoremem_msg *req);
 	int (*fetch_registers)(struct uthread *t, struct d9_regs *resp);
 	int (*store_registers)(struct uthread *t, struct d9_regs *resp);
-	void (*resume)(void);
+	void (*resume)(bool singlestep);
 };
 
 /* gdbserver ops.
@@ -185,7 +190,7 @@ void d9s_init(struct d9_ops *debug_ops);
 int d9s_read_memory(const struct d9_treadmem_msg *req,
                     struct d9_rreadmem_msg *resp);
 int d9s_store_memory(const struct d9_tstoremem_msg *req);
-void d9s_resume(void);
+void d9s_resume(bool singlestep);
 
 /* Helpers to send messages from 2LS to gdbserver. */
 int d9s_notify_hit_breakpoint(uint64_t tid, uint64_t address);
@@ -197,7 +202,8 @@ void *d9c_read_thread(void *arg);
 
 /* Helpers to send messages from gdbserver to 2LS. */
 int d9c_read_memory(int fd, uintptr_t address, uint32_t length, uint8_t *buf);
-int d9c_store_memory(int fd, uintptr_t address, void *data, uint32_t length);
+int d9c_store_memory(int fd, uintptr_t address, const void *const data,
+                     uint32_t length);
 int d9c_fetch_registers(int fd, uint64_t tid, struct d9_regs *regs);
 int d9c_store_registers(int fd, uint64_t tid, struct d9_regs *regs);
-int d9c_resume(int fd);
+int d9c_resume(int fd, bool singlestep);
