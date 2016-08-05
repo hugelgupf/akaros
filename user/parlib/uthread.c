@@ -1,16 +1,15 @@
 /* Copyright (c) 2011-2014 The Regents of the University of California
  * Barret Rhoden <brho@cs.berkeley.edu>
  * See LICENSE for details. */
-
-#include <ros/arch/membar.h>
 #include <parlib/arch/atomic.h>
-#include <parlib/parlib.h>
-#include <parlib/vcore.h>
-#include <parlib/uthread.h>
-#include <parlib/event.h>
-#include <stdlib.h>
-#include <parlib/assert.h>
 #include <parlib/arch/trap.h>
+#include <parlib/assert.h>
+#include <parlib/event.h>
+#include <parlib/spinlock.h>
+#include <parlib/parlib.h>
+#include <parlib/uthread.h>
+#include <ros/arch/membar.h>
+#include <stdlib.h>
 
 /* SCPs have a default 2LS that only manages thread 0.  Any other 2LS, such as
  * pthreads, should override sched_ops in its init code. */
@@ -22,6 +21,11 @@ __thread struct uthread *current_uthread = 0;
  * extensively about the details.  Will call out when necessary. */
 static struct event_queue *preempt_ev_q;
 
+/* Thread list and associated lock. */
+LIST_HEAD(uthread_list, uthread);
+static struct uthread_list all_uthreads = LIST_HEAD_INITIALIZER(all_uthreads);
+static struct spin_pdr_lock thread_list_lock = SPINPDR_INITIALIZER;
+
 /* Helpers: */
 #define UTH_TLSDESC_NOTLS (void*)(-1)
 static inline bool __uthread_has_tls(struct uthread *uthread);
@@ -29,6 +33,7 @@ static int __uthread_allocate_tls(struct uthread *uthread);
 static int __uthread_reinit_tls(struct uthread *uthread);
 static void __uthread_free_tls(struct uthread *uthread);
 static void __run_current_uthread_raw(void);
+static void uthread_assign_id(struct uthread *uthread);
 
 static void handle_vc_preempt(struct event_msg *ev_msg, unsigned int ev_type,
                               void *data);
@@ -55,8 +60,24 @@ static void uthread_init_thread0(struct uthread *uthread)
 	/* need to track thread0 for TLS deallocation */
 	uthread->flags |= UTHREAD_IS_THREAD0;
 	uthread->notif_disabled_depth = 0;
-	/* setting the uthread's TLS var.  this is idempotent for SCPs (us) */
+	/* setting the uthread's TLS var. this is idempotent for SCPs (us) */
 	__vcoreid = 0;
+
+	spin_pdr_lock(&thread_list_lock);
+	uthread->id = 0;
+	LIST_INSERT_HEAD(&all_uthreads, uthread, entry);
+	spin_pdr_unlock(&thread_list_lock);
+}
+
+static void uthread_assign_id(struct uthread *uthread)
+{
+	static uint64_t next_tid = 1;
+
+	/* Assign a thread ID and add to thread list. */
+	spin_pdr_lock(&thread_list_lock);
+	uthread->id = next_tid++;
+	LIST_INSERT_HEAD(&all_uthreads, uthread, entry);
+	spin_pdr_unlock(&thread_list_lock);
 }
 
 /* Helper, makes VC ctx tracks uthread as its current_uthread in its TLS.
@@ -72,8 +93,12 @@ static void uthread_track_thread0(struct uthread *uthread)
 	begin_safe_access_tls_vars();
 	/* We might have a basic uthread already installed (from a prior call), so
 	 * free it before installing the new one. */
-	if (current_uthread)
+	if (current_uthread) {
+		/*spin_pdr_lock(&thread_list_lock);
+		LIST_REMOVE(current_uthread, entry);
+		spin_pdr_unlock(&thread_list_lock);*/
 		free(current_uthread);
+	}
 	current_uthread = uthread;
 	/* We may not be an MCP at this point (and thus not really working with
 	 * vcores), but there is still the notion of something vcore_context-like
@@ -291,6 +316,9 @@ void uthread_init(struct uthread *new_thread, struct uth_thread_attr *attr)
 	 * were interrupted off a core. */
 	new_thread->flags |= UTHREAD_SAVED;
 	new_thread->notif_disabled_depth = 0;
+
+	uthread_assign_id(new_thread);
+
 	if (attr && attr->want_tls) {
 		/* Get a TLS.  If we already have one, reallocate/refresh it */
 		if (new_thread->tls_desc)
@@ -489,6 +517,11 @@ void uthread_sleep_forever(void)
 void uthread_cleanup(struct uthread *uthread)
 {
 	printd("[U] thread %08p on vcore %d is DYING!\n", uthread, vcore_id());
+
+	spin_pdr_lock(&thread_list_lock);
+	LIST_REMOVE(uthread, entry);
+	spin_pdr_unlock(&thread_list_lock);
+
 	/* we alloc and manage the TLS, so lets get rid of it, except for thread0.
 	 * glibc owns it.  might need to keep it around for a full exit() */
 	if (__uthread_has_tls(uthread) && !(uthread->flags & UTHREAD_IS_THREAD0))
@@ -1148,4 +1181,27 @@ static void __uthread_free_tls(struct uthread *uthread)
 {
 	free_tls(uthread->tls_desc);
 	uthread->tls_desc = NULL;
+}
+
+/* TODO(chrisko): hash table instead of list. */
+struct uthread *uthread_get_thread_by_id(uint64_t id)
+{
+	struct uthread *t = NULL, *ret = NULL;
+
+	spin_pdr_lock(&thread_list_lock);
+	LIST_FOREACH(t, &all_uthreads, entry) {
+		if (t->id == id) {
+			ret = t;
+			break;
+		}
+	}
+
+	/* TODO: increase ref count on thread when we have ref counting. */
+	spin_pdr_unlock(&thread_list_lock);
+	return ret;
+}
+
+void uthread_put_thread(struct uthread *uth)
+{
+	/* TODO: drop reference to thread. */
 }
