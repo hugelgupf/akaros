@@ -17,20 +17,20 @@
  * rather than excise code that won't work, I'm bracketing it with
  * #if 0 until we know we don't want it
  */
-#include <vfs.h>
+#include <arch/vmm/vmm.h>
+#include <assert.h>
+#include <cpio.h>
+#include <error.h>
 #include <kfs.h>
-#include <slab.h>
 #include <kmalloc.h>
 #include <kref.h>
-#include <string.h>
-#include <stdio.h>
-#include <assert.h>
-#include <error.h>
-#include <cpio.h>
 #include <pmap.h>
-#include <smp.h>
-#include <arch/vmm/vmm.h>
 #include <ros/vmm.h>
+#include <slab.h>
+#include <smp.h>
+#include <stdio.h>
+#include <string.h>
+#include <vfs.h>
 
 struct dev procdevtab;
 
@@ -100,61 +100,62 @@ enum {
 };
 
 /*
- * Status, fd, and ns are left fully readable (0444) because of their use in debugging,
+ * Status, fd, and ns are left fully readable (0444) because of their use in
+ * debugging,
  * particularly on shared servers.
- * Arguably, ns and fd shouldn't be readable; if you'd prefer, change them to 0000
+ * Arguably, ns and fd shouldn't be readable; if you'd prefer, change them to
+ * 0000
  */
 struct dirtab procdir[] = {
-	{"args", {Qargs}, 0, 0660},
-	{"ctl", {Qctl}, 0, 0660},
-	{"fd", {Qfd}, 0, 0444},
-	{"fpregs", {Qfpregs}, 0, 0000},
-	//  {"kregs",   {Qkregs},   sizeof(Ureg),       0600},
-	{"mem", {Qmem}, 0, 0000},
-	{"note", {Qnote}, 0, 0000},
-	{"noteid", {Qnoteid}, 0, 0664},
-	{"notepg", {Qnotepg}, 0, 0000},
-	{"ns", {Qns}, 0, 0444},
-	{"proc", {Qproc}, 0, 0400},
-	//  {"regs",        {Qregs},    sizeof(Ureg),       0000},
-	{"segment", {Qsegment}, 0, 0444},
-	{"status", {Qstatus}, STATSIZE, 0444},
-	{"strace", {Qstrace}, 0, 0666},
-	{"vmstatus", {Qvmstatus}, 0, 0444},
-	{"text", {Qtext}, 0, 0000},
-	{"wait", {Qwait}, 0, 0400},
-	{"profile", {Qprofile}, 0, 0400},
-	{"syscall", {Qsyscall}, 0, 0400},
-	{"core", {Qcore}, 0, 0444},
+    {"args", {Qargs}, 0, 0660},
+    {"ctl", {Qctl}, 0, 0660},
+    {"fd", {Qfd}, 0, 0444},
+    {"fpregs", {Qfpregs}, 0, 0000},
+    //  {"kregs",   {Qkregs},   sizeof(Ureg),       0600},
+    {"mem", {Qmem}, 0, 0000},
+    {"note", {Qnote}, 0, 0000},
+    {"noteid", {Qnoteid}, 0, 0664},
+    {"notepg", {Qnotepg}, 0, 0000},
+    {"ns", {Qns}, 0, 0444},
+    {"proc", {Qproc}, 0, 0400},
+    //  {"regs",        {Qregs},    sizeof(Ureg),       0000},
+    {"segment", {Qsegment}, 0, 0444},
+    {"status", {Qstatus}, STATSIZE, 0444},
+    {"strace", {Qstrace}, 0, 0666},
+    {"vmstatus", {Qvmstatus}, 0, 0444},
+    {"text", {Qtext}, 0, 0000},
+    {"wait", {Qwait}, 0, 0400},
+    {"profile", {Qprofile}, 0, 0400},
+    {"syscall", {Qsyscall}, 0, 0400},
+    {"core", {Qcore}, 0, 0444},
 };
 
-static
-struct cmdtab proccmd[] = {
-	{CMclose, "close", 2},
-	{CMclosefiles, "closefiles", 1},
-	{CMfixedpri, "fixedpri", 2},
-	{CMhang, "hang", 1},
-	{CMnohang, "nohang", 1},
-	{CMnoswap, "noswap", 1},
-	{CMkill, "kill", 1},
-	{CMpri, "pri", 2},
-	{CMprivate, "private", 1},
-	{CMprofile, "profile", 1},
-	{CMstart, "start", 1},
-	{CMstartstop, "startstop", 1},
-	{CMstartsyscall, "startsyscall", 1},
-	{CMstop, "stop", 1},
-	{CMwaitstop, "waitstop", 1},
-	{CMwired, "wired", 2},
-	{CMcore, "core", 2},
-	{CMcore, "core", 2},
-	{CMcore, "core", 2},
-	{CMvminit, "vminit", 0},
-	{CMvmstart, "vmstart", 0},
-	{CMvmkill, "vmkill", 0},
-	{CMstraceme, "straceme", 0},
-	{CMstraceall, "straceall", 0},
-	{CMstraceoff, "straceoff", 0},
+static struct cmdtab proccmd[] = {
+    {CMclose, "close", 2},
+    {CMclosefiles, "closefiles", 1},
+    {CMfixedpri, "fixedpri", 2},
+    {CMhang, "hang", 1},
+    {CMnohang, "nohang", 1},
+    {CMnoswap, "noswap", 1},
+    {CMkill, "kill", 1},
+    {CMpri, "pri", 2},
+    {CMprivate, "private", 1},
+    {CMprofile, "profile", 1},
+    {CMstart, "start", 1},
+    {CMstartstop, "startstop", 1},
+    {CMstartsyscall, "startsyscall", 1},
+    {CMstop, "stop", 1},
+    {CMwaitstop, "waitstop", 1},
+    {CMwired, "wired", 2},
+    {CMcore, "core", 2},
+    {CMcore, "core", 2},
+    {CMcore, "core", 2},
+    {CMvminit, "vminit", 0},
+    {CMvmstart, "vmstart", 0},
+    {CMvmkill, "vmkill", 0},
+    {CMstraceme, "straceme", 0},
+    {CMstraceall, "straceall", 0},
+    {CMstraceoff, "straceoff", 0},
 };
 
 /*
@@ -165,31 +166,31 @@ struct cmdtab proccmd[] = {
  *	32 bits of pid, for consistency checking
  * If notepg, c->pgrpid.path is pgrp slot, .vers is noteid.
  */
-#define	QSHIFT	5	/* location in qid of proc slot # */
-#define	SLOTBITS 23	/* number of bits in the slot */
-#define	QIDMASK	((1<<QSHIFT)-1)
-#define	SLOTMASK	(((1<<SLOTBITS)-1) << QSHIFT)
+#define QSHIFT 5    /* location in qid of proc slot # */
+#define SLOTBITS 23 /* number of bits in the slot */
+#define QIDMASK ((1 << QSHIFT) - 1)
+#define SLOTMASK (((1 << SLOTBITS) - 1) << QSHIFT)
 
-#define QID(q)		((((uint32_t)(q).path)&QIDMASK)>>0)
-#define SLOT(q)		(((((uint32_t)(q).path)&SLOTMASK)>>QSHIFT)-1)
-#define PID(q)		((q).vers)
-#define NOTEID(q)	((q).vers)
+#define QID(q) ((((uint32_t)(q).path) & QIDMASK) >> 0)
+#define SLOT(q) (((((uint32_t)(q).path) & SLOTMASK) >> QSHIFT) - 1)
+#define PID(q) ((q).vers)
+#define NOTEID(q) ((q).vers)
 
 static void procctlreq(struct proc *, char *, int);
 static int procctlmemio(struct proc *, uintptr_t, int, void *, int);
-//static struct chan*   proctext(struct chan*, struct proc*);
-//static Segment* txt2data(struct proc*, Segment*);
-//static int    procstopped(void*);
+// static struct chan*   proctext(struct chan*, struct proc*);
+// static Segment* txt2data(struct proc*, Segment*);
+// static int    procstopped(void*);
 static void mntscan(struct mntwalk *, struct proc *);
 
-//static Traceevent *tevents;
+// static Traceevent *tevents;
 static char *tpids, *tpidsc, *tpidse;
 static spinlock_t tlock;
 static int topens;
 static int tproduced, tconsumed;
-//static void notrace(struct proc*, int, int64_t);
+// static void notrace(struct proc*, int, int64_t);
 
-//void (*proctrace)(struct proc*, int, int64_t) = notrace;
+// void (*proctrace)(struct proc*, int, int64_t) = notrace;
 
 #if 0
 static void profclock(Ureg * ur, Timer *)
@@ -207,9 +208,8 @@ static void profclock(Ureg * ur, Timer *)
 	}
 }
 #endif
-static int
-procgen(struct chan *c, char *name, struct dirtab *tab, int unused, int s,
-		struct dir *dp)
+static int procgen(struct chan *c, char *name, struct dirtab *tab, int unused,
+                   int s, struct dir *dp)
 {
 	struct qid qid;
 	struct proc *p;
@@ -292,7 +292,7 @@ procgen(struct chan *c, char *name, struct dirtab *tab, int unused, int s,
 	tab = &procdir[s];
 	/* path is everything other than the QID part.  Not sure from the orig code
 	 * if they wanted just the pid part (SLOTMASK) or everything above QID */
-	path = c->qid.path & ~QIDMASK;	/* slot component */
+	path = c->qid.path & ~QIDMASK; /* slot component */
 	if ((p = pid2proc(SLOT(c->qid))) == NULL)
 		return -1;
 	perm = 0444 | tab->perm;
@@ -381,12 +381,12 @@ static struct chan *procattach(char *spec)
 }
 
 static struct walkqid *procwalk(struct chan *c, struct chan *nc, char **name,
-								int nname)
+                                int nname)
 {
 	return devwalk(c, nc, name, nname, 0, 0, procgen);
 }
 
-static int procstat(struct chan *c, uint8_t * db, int n)
+static int procstat(struct chan *c, uint8_t *db, int n)
 {
 	return devstat(c, db, n, 0, 0, procgen);
 }
@@ -474,9 +474,9 @@ static struct chan *procopen(struct chan *c, int omode)
 	}
 	if ((p = pid2proc(SLOT(c->qid))) == NULL)
 		error(ESRCH, ERROR_FIXME);
-	//qlock(&p->debug);
+	// qlock(&p->debug);
 	if (waserror()) {
-		//qunlock(&p->debug);
+		// qunlock(&p->debug);
 		kref_put(&p->p_kref);
 		nexterror();
 	}
@@ -487,92 +487,96 @@ static struct chan *procopen(struct chan *c, int omode)
 	omode = openmode(omode);
 
 	switch (QID(c->qid)) {
-		case Qtext:
-			error(ENOSYS, ERROR_FIXME);
-/*
-			if (omode != OREAD)
-				error(EPERM, ERROR_FIXME);
-			tc = proctext(c, p);
-			tc->offset = 0;
-			poperror();
-			qunlock(&p->debug);
-			kref_put(&p->p_kref);
-			cclose(c);
-			return tc;
-*/
-		case Qproc:
-		case Qsegment:
-		case Qprofile:
-		case Qfd:
-			if (omode != O_READ)
-				error(EPERM, ERROR_FIXME);
-			break;
-
-		case Qnote:
-//          if (p->privatemem)
-			error(EPERM, ERROR_FIXME);
-			break;
-
-		case Qmem:
-//          if (p->privatemem)
-			error(EPERM, ERROR_FIXME);
-			//nonone(p);
-			break;
-
-		case Qargs:
-		case Qnoteid:
-		case Qwait:
-		case Qregs:
-		case Qfpregs:
-		case Qkregs:
-		case Qsyscall:
-		case Qcore:
-			nonone(p);
-			break;
-
-		case Qns:
-			if (omode != O_READ)
-				error(EPERM, ERROR_FIXME);
-			c->aux = kzmalloc(sizeof(struct mntwalk), MEM_WAIT);
-			break;
-		case Qstatus:
-		case Qvmstatus:
-		case Qctl:
-			break;
-
-		case Qstrace:
-			if (!p->strace)
-				error(ENOENT, "Process does not have tracing enabled");
-			/* the ref we are upping is the one we put in __proc_free, which is
-			 * the one we got from CMstrace{on,me}.  We have a ref on p, so we
-			 * know we won't free until we decref the proc. */
-			kref_get(&p->strace->users, 1);
-			c->aux = p->strace;
-			break;
-		case Qnotepg:
-			error(ENOSYS, ERROR_FIXME);
+	case Qtext:
+		error(ENOSYS, ERROR_FIXME);
 #if 0
-			nonone(p);
-			pg = p->pgrp;
-			if (pg == NULL)
-				error(ESRCH, ERROR_FIXME);
-			if (omode != OWRITE || pg->pgrpid == 1)
-				error(EPERM, ERROR_FIXME);
-			c->pgrpid.path = pg->pgrpid + 1;
-			c->pgrpid.vers = p->noteid;
+		if (omode != OREAD)
+			error(EPERM, ERROR_FIXME);
+		tc = proctext(c, p);
+		tc->offset = 0;
+		poperror();
+		qunlock(&p->debug);
+		kref_put(&p->p_kref);
+		cclose(c);
+		return tc;
 #endif
-			break;
 
-		default:
-			printk("procopen %#llux\n", c->qid.path);
-			error(EINVAL, ERROR_FIXME);
+	case Qproc:
+	case Qsegment:
+	case Qprofile:
+	case Qfd:
+		if (omode != O_READ)
+			error(EPERM, ERROR_FIXME);
+		break;
+
+	case Qnote:
+		// if (p->privatemem)
+		error(EPERM, ERROR_FIXME);
+		break;
+
+	case Qmem:
+		// if (p->privatemem)
+		error(EPERM, ERROR_FIXME);
+		// nonone(p);
+		break;
+
+	case Qargs:
+	case Qnoteid:
+	case Qwait:
+	case Qregs:
+	case Qfpregs:
+	case Qkregs:
+	case Qsyscall:
+	case Qcore:
+		nonone(p);
+		break;
+
+	case Qns:
+		if (omode != O_READ)
+			error(EPERM, ERROR_FIXME);
+		c->aux = kzmalloc(sizeof(struct mntwalk), MEM_WAIT);
+		break;
+
+	case Qstatus:
+	case Qvmstatus:
+	case Qctl:
+		break;
+
+	case Qstrace:
+		if (!p->strace)
+			error(ENOENT, "Process does not have tracing enabled");
+		/* the ref we are upping is the one we put in __proc_free, which is
+		 * the one we got from CMstrace{on,me}.  We have a ref on p, so we
+		 * know we won't free until we decref the proc. */
+		kref_get(&p->strace->users, 1);
+		c->aux = p->strace;
+		break;
+
+	case Qnotepg:
+		error(ENOSYS, ERROR_FIXME);
+#if 0
+		nonone(p);
+		pg = p->pgrp;
+		if (pg == NULL)
+			error(ESRCH, ERROR_FIXME);
+		if (omode != OWRITE || pg->pgrpid == 1)
+			error(EPERM, ERROR_FIXME);
+		c->pgrpid.path = pg->pgrpid + 1;
+		c->pgrpid.vers = p->noteid;
+#endif
+		break;
+
+	default:
+		printk("procopen %#llux\n", c->qid.path);
+		error(EINVAL, ERROR_FIXME);
 	}
 
 	/* Affix pid to qid */
-//  if (p->state != Dead)
+	//  if (p->state != Dead)
 	c->qid.vers = p->pid;
-	/* make sure the process slot didn't get reallocated while we were playing */
-	//coherence();
+	/* make sure the process slot didn't get reallocated while we were playing
+	 */
+	// coherence();
 	/* TODO: think about what we really want here.  In akaros, we wouldn't have
 	 * our pid changed like that. */
 	if (p->pid != pid)
@@ -580,12 +584,12 @@ static struct chan *procopen(struct chan *c, int omode)
 
 	tc = devopen(c, omode, 0, 0, procgen);
 	poperror();
-	//qunlock(&p->debug);
+	// qunlock(&p->debug);
 	kref_put(&p->p_kref);
 	return tc;
 }
 
-static int procwstat(struct chan *c, uint8_t * db, int n)
+static int procwstat(struct chan *c, uint8_t *db, int n)
 {
 	ERRSTACK(2);
 	error(ENOSYS, ERROR_FIXME);
@@ -850,108 +854,105 @@ static long procread(struct chan *c, void *va, long n, int64_t off)
 	 * already have the chan open, and all we want to do is read the queue,
 	 * which exists because of our kref on it. */
 	switch (QID(c->qid)) {
-		case Qstrace:
-			s = c->aux;
-			n = qread(s->q, va, n);
-			return n;
+	case Qstrace:
+		s = c->aux;
+		n = qread(s->q, va, n);
+		return n;
 	}
 
 	if ((p = pid2proc(SLOT(c->qid))) == NULL)
 		error(ESRCH, "%d: no such process", SLOT(c->qid));
 	if (p->pid != PID(c->qid)) {
 		kref_put(&p->p_kref);
-		error(ESRCH, "weird: p->pid is %d, PID(c->qid) is %d: mismatch",
-		      p->pid, PID(c->qid));
+		error(ESRCH, "weird: p->pid is %d, PID(c->qid) is %d: mismatch", p->pid,
+		      PID(c->qid));
 	}
 	switch (QID(c->qid)) {
-		default:
+	default:
+		kref_put(&p->p_kref);
+		break;
+	case Qstatus: {
+		/* the old code grew the stack and was hideous.
+		 * status is not a high frequency operation; just malloc. */
+		char *buf = kmalloc(4096, MEM_WAIT);
+		char *s = buf, *e = buf + 4096;
+		int i;
+
+		s = seprintf(s, e, "%8d %-*s %-10s %6d", p->pid, PROC_PROGNAME_SZ,
+		             p->progname, procstate2str(p->state), p->ppid);
+		if (p->strace)
+			s = seprintf(s, e, " %d trace users %d traced procs",
+			             kref_refcnt(&p->strace->users),
+			             kref_refcnt(&p->strace->procs));
+		kref_put(&p->p_kref);
+		i = readstr(off, va, n, buf);
+		kfree(buf);
+		return i;
+	}
+
+	case Qvmstatus: {
+		size_t buflen = 50 * 65 + 2;
+		char *buf = kmalloc(buflen, MEM_WAIT);
+		int i, offset;
+		offset = 0;
+		offset += snprintf(buf + offset, buflen - offset, "{\n");
+		for (i = 0; i < 65; i++) {
+			if (p->vmm.vmexits[i] != 0) {
+				offset += snprintf(buf + offset, buflen - offset,
+				                   "\"%s\":\"%lld\",\n",
+				                   VMX_EXIT_REASON_NAMES[i], p->vmm.vmexits[i]);
+			}
+		}
+		offset += snprintf(buf + offset, buflen - offset, "}\n");
+		kref_put(&p->p_kref);
+		n = readstr(off, va, n, buf);
+		kfree(buf);
+		return n;
+	}
+
+	case Qns:
+		// qlock(&p->debug);
+		if (waserror()) {
+			// qunlock(&p->debug);
 			kref_put(&p->p_kref);
-			break;
-		case Qstatus:{
-				/* the old code grew the stack and was hideous.
-				 * status is not a high frequency operation; just malloc. */
-				char *buf = kmalloc(4096, MEM_WAIT);
-				char *s = buf, *e = buf + 4096;
-				int i;
-
-				s = seprintf(s, e,
-				         "%8d %-*s %-10s %6d", p->pid, PROC_PROGNAME_SZ,
-				         p->progname, procstate2str(p->state),
-				         p->ppid);
-				if (p->strace)
-					s = seprintf(s, e, " %d trace users %d traced procs",
-					             kref_refcnt(&p->strace->users),
-					             kref_refcnt(&p->strace->procs));
-				kref_put(&p->p_kref);
-				i = readstr(off, va, n, buf);
-				kfree(buf);
-				return i;
-			}
-
-		case Qvmstatus:
-			{
-				size_t buflen = 50 * 65 + 2;
-				char *buf = kmalloc(buflen, MEM_WAIT);
-				int i, offset;
-				offset = 0;
-				offset += snprintf(buf + offset, buflen - offset, "{\n");
-				for (i = 0; i < 65; i++) {
-					if (p->vmm.vmexits[i] != 0) {
-						offset += snprintf(buf + offset, buflen - offset,
-						                   "\"%s\":\"%lld\",\n",
-						                   VMX_EXIT_REASON_NAMES[i],
-						                   p->vmm.vmexits[i]);
-					}
-				}
-				offset += snprintf(buf + offset, buflen - offset, "}\n");
-				kref_put(&p->p_kref);
-				n = readstr(off, va, n, buf);
-				kfree(buf);
-				return n;
-			}
-		case Qns:
-			//qlock(&p->debug);
-			if (waserror()) {
-				//qunlock(&p->debug);
-				kref_put(&p->p_kref);
-				nexterror();
-			}
-			if (p->pgrp == NULL || p->pid != PID(c->qid))
-				error(ESRCH, ERROR_FIXME);
-			mw = c->aux;
-			if (mw->cddone) {
-				poperror();
-				//qunlock(&p->debug);
-				kref_put(&p->p_kref);
-				return 0;
-			}
-			mntscan(mw, p);
-			if (mw->mh == 0) {
-				mw->cddone = 1;
-				i = snprintf(va, n, "cd %s\n", p->dot->name->s);
-				poperror();
-				//qunlock(&p->debug);
-				kref_put(&p->p_kref);
-				return i;
-			}
-			int2flag(mw->cm->mflag, flag);
-			if (strcmp(mw->cm->to->name->s, "#M") == 0) {
-				srv = srvname(mw->cm->to->mchan);
-				i = snprintf(va, n, "mount %s %s %s %s\n", flag,
-							 srv == NULL ? mw->cm->to->mchan->name->s : srv,
-							 mw->mh->from->name->s,
-							 mw->cm->spec ? mw->cm->spec : "");
-				kfree(srv);
-			} else
-				i = snprintf(va, n, "bind %s %s %s\n", flag,
-							 mw->cm->to->name->s, mw->mh->from->name->s);
+			nexterror();
+		}
+		if (p->pgrp == NULL || p->pid != PID(c->qid))
+			error(ESRCH, ERROR_FIXME);
+		mw = c->aux;
+		if (mw->cddone) {
 			poperror();
-			//qunlock(&p->debug);
+			// qunlock(&p->debug);
+			kref_put(&p->p_kref);
+			return 0;
+		}
+		mntscan(mw, p);
+		if (mw->mh == 0) {
+			mw->cddone = 1;
+			i = snprintf(va, n, "cd %s\n", p->dot->name->s);
+			poperror();
+			// qunlock(&p->debug);
 			kref_put(&p->p_kref);
 			return i;
+		}
+		int2flag(mw->cm->mflag, flag);
+		if (strcmp(mw->cm->to->name->s, "#M") == 0) {
+			srv = srvname(mw->cm->to->mchan);
+			i = snprintf(va, n, "mount %s %s %s %s\n", flag,
+			             srv == NULL ? mw->cm->to->mchan->name->s : srv,
+			             mw->mh->from->name->s,
+			             mw->cm->spec ? mw->cm->spec : "");
+			kfree(srv);
+		} else
+			i = snprintf(va, n, "bind %s %s %s\n", flag, mw->cm->to->name->s,
+			             mw->mh->from->name->s);
+		poperror();
+		// qunlock(&p->debug);
+		kref_put(&p->p_kref);
+		return i;
 	}
 	error(EINVAL, "QID %d did not match any QIDs for #proc", QID(c->qid));
-	return 0;	/* not reached */
+	return 0; /* not reached */
 }
 
 static void mntscan(struct mntwalk *mw, struct proc *p)
@@ -965,7 +966,7 @@ static void mntscan(struct mntwalk *mw, struct proc *p)
 	rlock(&pg->ns);
 
 	nxt = 0;
-	best = (int)(~0U >> 1);	/* largest 2's complement int */
+	best = (int)(~0U >> 1); /* largest 2's complement int */
 
 	last = 0;
 	if (mw->mh)
@@ -1053,21 +1054,22 @@ static long procwrite(struct chan *c, void *va, long n, int64_t off)
 			n = fpudevprocio(p, va, n, offset, 1);
 			break;
 #endif
-		case Qctl:
-			procctlreq(p, va, n);
-			break;
+	case Qctl:
+		procctlreq(p, va, n);
+		break;
 
-		/* this lets your write a marker into the data stream,
-		 * which is a very powerful tool. */
-		case Qstrace:
-			assert(c->aux);
-			/* it is possible that the q hungup and is closed.  that would be
-			 * the case if all of the procs closed and decref'd.  if the q is
-			 * closed, qwrite() will throw an error. */
-			n = qwrite(((struct strace*)c->aux)->q, va, n);
-			break;
-		default:
-			error(EFAIL, "unknown qid %#llux in procwrite\n", c->qid.path);
+	/* this lets your write a marker into the data stream,
+	 * which is a very powerful tool. */
+	case Qstrace:
+		assert(c->aux);
+		/* it is possible that the q hungup and is closed.  that would be
+		 * the case if all of the procs closed and decref'd.  if the q is
+		 * closed, qwrite() will throw an error. */
+		n = qwrite(((struct strace *)c->aux)->q, va, n);
+		break;
+
+	default:
+		error(EFAIL, "unknown qid %#llux in procwrite\n", c->qid.path);
 	}
 	poperror();
 	kref_put(&p->p_kref);
@@ -1075,25 +1077,25 @@ static long procwrite(struct chan *c, void *va, long n, int64_t off)
 }
 
 struct dev procdevtab __devtab = {
-	.name = "proc",
+    .name = "proc",
 
-	.reset = devreset,
-	.init = procinit,
-	.shutdown = devshutdown,
-	.attach = procattach,
-	.walk = procwalk,
-	.stat = procstat,
-	.open = procopen,
-	.create = devcreate,
-	.close = procclose,
-	.read = procread,
-	.bread = devbread,
-	.write = procwrite,
-	.bwrite = devbwrite,
-	.remove = devremove,
-	.wstat = procwstat,
-	.power = devpower,
-	.chaninfo = devchaninfo,
+    .reset = devreset,
+    .init = procinit,
+    .shutdown = devshutdown,
+    .attach = procattach,
+    .walk = procwalk,
+    .stat = procstat,
+    .open = procopen,
+    .create = devcreate,
+    .close = procclose,
+    .read = procread,
+    .bread = devbread,
+    .write = procwrite,
+    .bwrite = devbwrite,
+    .remove = devremove,
+    .wstat = procwstat,
+    .power = devpower,
+    .chaninfo = devchaninfo,
 };
 
 #if 0
@@ -1180,21 +1182,21 @@ void procstopwait(struct proc *p, int ctl)
 #endif
 static void procctlcloseone(struct proc *p, int fd)
 {
-// TODO: resolve this and sys_close
+	// TODO: resolve this and sys_close
 	struct file *file = get_file_from_fd(&p->open_files, fd);
 	int retval = 0;
 	printd("%s %d\n", __func__, fd);
 	/* VFS */
 	if (file) {
 		put_file_from_fd(&p->open_files, fd);
-		kref_put(&file->f_kref);	/* Drop the ref from get_file */
+		kref_put(&file->f_kref); /* Drop the ref from get_file */
 		return;
 	}
 	/* 9ns, should also handle errors (bad FD, etc) */
 	retval = sysclose(fd);
 	return;
 
-	//sys_close(p, fd);
+	// sys_close(p, fd);
 }
 
 void procctlclosefiles(struct proc *p, int all, int fd)
@@ -1255,7 +1257,7 @@ static void procctlreq(struct proc *p, char *va, int n)
 		/* common allocation.  if we inherited, we might have one already */
 		if (!p->strace) {
 			strace = kzmalloc(sizeof(*p->strace), MEM_WAIT);
-			strace->q = qopen(65536, Qdropoverflow|Qcoalesce, NULL, NULL);
+			strace->q = qopen(65536, Qdropoverflow | Qcoalesce, NULL, NULL);
 			/* both of these refs are put when the proc is freed.  procs is for
 			 * every process that has this p->strace.  users is procs + every
 			 * user (e.g. from open()).
@@ -1267,7 +1269,7 @@ static void procctlreq(struct proc *p, char *va, int n)
 			 * with us here with the kref initialization. */
 			kref_init(&strace->procs, strace_shutdown, 1);
 			kref_init(&strace->users, strace_release, 1);
-			if (!atomic_cas_ptr((void**)&p->strace, 0, strace)) {
+			if (!atomic_cas_ptr((void **)&p->strace, 0, strace)) {
 				/* someone else won the race and installed strace. */
 				qfree(strace->q);
 				kfree(strace);
@@ -1284,9 +1286,11 @@ static void procctlreq(struct proc *p, char *va, int n)
 	default:
 		error(EFAIL, "Command not implemented");
 		break;
+
 	case CMclose:
 		procctlclosefiles(p, 0, atoi(cb->f[1]));
 		break;
+
 	case CMclosefiles:
 		procctlclosefiles(p, 1, 0);
 		break;
@@ -1294,6 +1298,7 @@ static void procctlreq(struct proc *p, char *va, int n)
 		we may want this.Let us pause a proc.case CMhang:p->hang = 1;
 		break;
 #endif
+
 	case CMkill:
 		p = pid2proc(strtol(cb->f[1], 0, 0));
 		if (!p)
@@ -1308,16 +1313,20 @@ static void procctlreq(struct proc *p, char *va, int n)
 		 * hyperthreaded core. */
 		spin_on(p->env_cr3);
 		break;
+
 	case CMvminit:
 		break;
+
 	case CMstraceme:
 		p->strace_on = TRUE;
 		p->strace_inherit = FALSE;
 		break;
+
 	case CMstraceall:
 		p->strace_on = TRUE;
 		p->strace_inherit = TRUE;
 		break;
+
 	case CMstraceoff:
 		p->strace_on = FALSE;
 		p->strace_inherit = FALSE;
