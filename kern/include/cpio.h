@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vfs.h>
+
 #define CPIO_NEW_ASCII	070701
 #define CPIO_CRC_ASCII	070702
 /* Mode bits */

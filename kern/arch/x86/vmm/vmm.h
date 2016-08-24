@@ -1,11 +1,14 @@
 #pragma once
 
+#include <arch/x86.h>
+#include <atomic.h>
+#include <kthread.h>
 #include <ros/vmm.h>
 
 static inline int cpu_has_vmx(void)
 {
 	unsigned long ecx = cpuid_ecx(1);
-	return ecx & (1<<5); /* CPUID.1:ECX.VMX[bit 5] -> VT */
+	return ecx & (1 << 5); /* CPUID.1:ECX.VMX[bit 5] -> VT */
 }
 
 /* maybe someday, not today. */
@@ -14,7 +17,7 @@ static inline int cpu_has_svm(const char **msg)
 	return 0;
 }
 
-#define VMM_VMEXIT_NR_TYPES		65
+#define VMM_VMEXIT_NR_TYPES 65
 
 struct guest_pcore {
 	int cpu;
@@ -30,7 +33,7 @@ struct guest_pcore {
 };
 
 struct vmm {
-	spinlock_t lock;	/* protects guest_pcore assignment */
+	spinlock_t lock; /* protects guest_pcore assignment */
 	qlock_t qlock;
 	// always false.
 	int amd;
@@ -78,6 +81,6 @@ struct guest_pcore *lookup_guest_pcore(struct proc *p, int guest_pcoreid);
 struct guest_pcore *load_guest_pcore(struct proc *p, int guest_pcoreid);
 void unload_guest_pcore(struct proc *p, int guest_pcoreid);
 
-#define VMM_MSR_EMU_READ		1
-#define VMM_MSR_EMU_WRITE		2
+#define VMM_MSR_EMU_READ 1
+#define VMM_MSR_EMU_WRITE 2
 bool vmm_emulate_msr(uint64_t *rcx, uint64_t *rdx, uint64_t *rax, int op);
