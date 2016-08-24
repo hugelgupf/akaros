@@ -21,20 +21,20 @@
  * and then we might not close.  This ends up decreffing top_dir too much, and
  * giving it's refs to some other file in the walk. */
 
-#include <vfs.h>
+#include <assert.h>
+#include <cpio.h>
+#include <error.h>
+#include <ip.h>
 #include <kfs.h>
-#include <slab.h>
 #include <kmalloc.h>
 #include <kref.h>
-#include <string.h>
-#include <stdio.h>
-#include <assert.h>
-#include <error.h>
-#include <cpio.h>
 #include <pmap.h>
+#include <slab.h>
 #include <smp.h>
-#include <ip.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/queue.h>
+#include <vfs.h>
 
 struct dev srvdevtab;
 
@@ -43,17 +43,17 @@ static char *devname(void)
 	return srvdevtab.name;
 }
 
-#define Qtopdir			1
-#define Qsrvfile		2
+#define Qtopdir 1
+#define Qsrvfile 2
 
 struct srvfile {
 	TAILQ_ENTRY(srvfile) link;
 	char *name;
 	struct chan *chan;
-	struct kref ref;			/* +1 for existing on create, -1 on remove */
+	struct kref ref; /* +1 for existing on create, -1 on remove */
 	char *user;
 	uint32_t perm;
-	atomic_t opens;				/* used for exclusive open checks */
+	atomic_t opens; /* used for exclusive open checks */
 };
 
 struct srvfile *top_dir;
@@ -62,7 +62,7 @@ TAILQ_HEAD(srvfilelist, srvfile) srvfiles = TAILQ_HEAD_INITIALIZER(srvfiles);
  * without the lock. (if you're on the list, we can grab a ref). */
 spinlock_t srvlock = SPINLOCK_INITIALIZER;
 
-atomic_t nr_srvs = 0;			/* debugging - concerned about leaking mem */
+atomic_t nr_srvs = 0; /* debugging - concerned about leaking mem */
 
 /* Given a pointer (internal ref), we attempt to get a kref */
 static bool grab_ref(struct srvfile *srv)
@@ -70,7 +70,7 @@ static bool grab_ref(struct srvfile *srv)
 	bool ret = FALSE;
 	struct srvfile *srv_i;
 	spin_lock(&srvlock);
-	TAILQ_FOREACH(srv_i, &srvfiles, link) {
+	TAILQ_FOREACH (srv_i, &srvfiles, link) {
 		if (srv_i == srv) {
 			ret = kref_get_not_zero(&srv_i->ref, 1);
 			break;
@@ -91,8 +91,8 @@ static void srv_release(struct kref *kref)
 	atomic_dec(&nr_srvs);
 }
 
-static int srvgen(struct chan *c, char *name, struct dirtab *tab,
-				  int ntab, int s, struct dir *dp)
+static int srvgen(struct chan *c, char *name, struct dirtab *tab, int ntab,
+                  int s, struct dir *dp)
 {
 	struct srvfile *prev, *next;
 	struct qid q;
@@ -104,7 +104,7 @@ static int srvgen(struct chan *c, char *name, struct dirtab *tab,
 		return 1;
 	}
 	spin_lock(&srvlock);
-	TAILQ_FOREACH(next, &srvfiles, link) {
+	TAILQ_FOREACH (next, &srvfiles, link) {
 		/* come in with s == 0 on the first run */
 		if (s-- == 0)
 			break;
@@ -115,11 +115,11 @@ static int srvgen(struct chan *c, char *name, struct dirtab *tab,
 	}
 	/* update c to point to our new srvfile.  this keeps the chan and its srv in
 	 * sync with what we're genning. */
-	c->aux = next;	/* uncounted ref */
+	c->aux = next; /* uncounted ref */
 	mkqid(&q, Qsrvfile, 0, QTFILE);
 	/* once we release the lock, next could disappear, including next->name */
 	strlcpy(get_cur_genbuf(), next->name, GENBUF_SZ);
-	devdir(c, q, get_cur_genbuf(), 1 /* length */ , next->user, next->perm, dp);
+	devdir(c, q, get_cur_genbuf(), 1 /* length */, next->user, next->perm, dp);
 	spin_unlock(&srvlock);
 	return 1;
 }
@@ -153,25 +153,24 @@ static struct chan *srvattach(char *spec)
 }
 
 static struct walkqid *srvwalk(struct chan *c, struct chan *nc, char **name,
-							   int nname)
+                               int nname)
 {
 	return devwalk(c, nc, name, nname, 0, 0, srvgen);
 }
 
-static int srvstat(struct chan *c, uint8_t * db, int n)
+static int srvstat(struct chan *c, uint8_t *db, int n)
 {
 	return devstat(c, db, n, 0, 0, srvgen);
 }
 
-char*
-srvname(struct chan *c)
+char *srvname(struct chan *c)
 {
 	struct srvfile *srv_i;
 	char *s;
 
 	spin_lock(&srvlock);
-	TAILQ_FOREACH(srv_i, &srvfiles, link) {
-		if(srv_i->chan == c){
+	TAILQ_FOREACH (srv_i, &srvfiles, link) {
+		if (srv_i->chan == c) {
 			int len = 3 + strlen(srv_i->name) + 1;
 			s = kzmalloc(len, 0);
 			snprintf(s, len, "#s/%s", srv_i->name);
@@ -187,7 +186,7 @@ static struct chan *srvopen(struct chan *c, int omode)
 {
 	ERRSTACK(1);
 	struct srvfile *srv;
-	openmode(omode);	/* used as an error checker in plan9, does little now */
+	openmode(omode); /* used as an error checker in plan9, does little now */
 	if (c->qid.type & QTDIR) {
 		if (omode & O_WRITE)
 			error(EISDIR, ERROR_FIXME);
@@ -204,7 +203,7 @@ static struct chan *srvopen(struct chan *c, int omode)
 		nexterror();
 	}
 	devpermcheck(srv->user, srv->perm, omode);
-	/* No remove on close support yet */
+/* No remove on close support yet */
 #if 0
 	if (omode & ORCLOSE) {
 		if (strcmp(srv->user, up->env->user) != 0)
@@ -236,8 +235,8 @@ static void srvcreate(struct chan *c, char *name, int omode, uint32_t perm)
 	srv = kzmalloc(sizeof(struct srvfile), MEM_WAIT);
 	kstrdup(&srv->name, name);
 	kstrdup(&srv->user, current ? current->user : "eve");
-	srv->perm = 0770;	/* TODO need some security thoughts */
-	atomic_set(&srv->opens, 1);	/* we return it opened */
+	srv->perm = 0770;           /* TODO need some security thoughts */
+	atomic_set(&srv->opens, 1); /* we return it opened */
 	mkqid(&c->qid, Qsrvfile, 0, QTFILE);
 	c->aux = srv;
 	c->mode = openmode(omode);
@@ -249,7 +248,7 @@ static void srvcreate(struct chan *c, char *name, int omode, uint32_t perm)
 	atomic_inc(&nr_srvs);
 }
 
-static int srvwstat(struct chan *c, uint8_t * dp, int n)
+static int srvwstat(struct chan *c, uint8_t *dp, int n)
 {
 	error(ENOSYS, ERROR_FIXME);
 	return -1;
@@ -269,7 +268,7 @@ static void srvremove(struct chan *c)
 	struct srvfile *srv_i, *temp;
 
 	spin_lock(&srvlock);
-	TAILQ_FOREACH_SAFE(srv_i, &srvfiles, link, temp) {
+	TAILQ_FOREACH_SAFE (srv_i, &srvfiles, link, temp) {
 		if (srv_i == c->aux) {
 			TAILQ_REMOVE(&srvfiles, srv_i, link);
 			break;
@@ -277,7 +276,7 @@ static void srvremove(struct chan *c)
 	}
 	spin_unlock(&srvlock);
 	if (srv_i)
-		kref_put(&srv_i->ref);	/* dropping ref from the list */
+		kref_put(&srv_i->ref); /* dropping ref from the list */
 }
 
 /* N.B. srvopen gives the chan back. The only 'reading' we do
@@ -330,23 +329,23 @@ static long srvwrite(struct chan *c, void *va, long count, int64_t offset)
 }
 
 struct dev srvdevtab __devtab = {
-	.name = "srv",
+    .name = "srv",
 
-	.reset = devreset,
-	.init = srvinit,
-	.shutdown = devshutdown,
-	.attach = srvattach,
-	.walk = srvwalk,
-	.stat = srvstat,
-	.open = srvopen,
-	.create = srvcreate,
-	.close = srvclose,
-	.read = srvread,
-	.bread = devbread,
-	.write = srvwrite,
-	.bwrite = devbwrite,
-	.remove = srvremove,
-	.wstat = srvwstat,
-	.power = devpower,
-	.chaninfo = devchaninfo,
+    .reset = devreset,
+    .init = srvinit,
+    .shutdown = devshutdown,
+    .attach = srvattach,
+    .walk = srvwalk,
+    .stat = srvstat,
+    .open = srvopen,
+    .create = srvcreate,
+    .close = srvclose,
+    .read = srvread,
+    .bread = devbread,
+    .write = srvwrite,
+    .bwrite = devbwrite,
+    .remove = srvremove,
+    .wstat = srvwstat,
+    .power = devpower,
+    .chaninfo = devchaninfo,
 };
