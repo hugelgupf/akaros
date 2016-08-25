@@ -840,7 +840,8 @@ int walk(struct chan **cp, char **names, int nnames, bool can_mount, int *nerror
 	c->name = cname;
 	c->mountpoint = lastmountpoint;
 
-	cclose(*cp);
+	// We are closing/decreasing refcount on *cp twice.
+	//cclose(*cp);
 	*cp = c;
 	if (nerror)
 		*nerror = 0;

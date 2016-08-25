@@ -64,6 +64,7 @@ enum {
 	Qprofile,
 	Qsyscall,
 	Qcore,
+	Qdebug,
 };
 
 enum {
@@ -128,6 +129,7 @@ struct dirtab procdir[] = {
     {"profile", {Qprofile}, 0, 0400},
     {"syscall", {Qsyscall}, 0, 0400},
     {"core", {Qcore}, 0, 0444},
+    {"debug", {Qdebug}, 0, 0444},
 };
 
 static struct cmdtab proccmd[] = {
@@ -417,6 +419,7 @@ static struct chan *procopen(struct chan *c, int omode)
 	struct proc *p;
 	struct pgrp *pg;
 	struct chan *tc;
+	struct chan *debugc;
 	int pid;
 
 	if (c->qid.type & QTDIR)
@@ -487,6 +490,20 @@ static struct chan *procopen(struct chan *c, int omode)
 	omode = openmode(omode);
 
 	switch (QID(c->qid)) {
+	case Qdebug:
+		qlock(&p->debug);
+		if (p->debug_pipe == NULL)
+			p->debug_pipe = namec("#pipe", Aopen, O_PATH, 0);
+
+		if (p == current)
+			debugc = namec_from(p->debug_pipe, "data", Aopen, O_RDWR, 0);
+		else
+			debugc = namec_from(p->debug_pipe, "data1", Aopen, O_RDWR, 0);
+
+		poperror();
+		kref_put(&p->p_kref);
+		qunlock(&p->debug);
+		return debugc;
 	case Qtext:
 		error(ENOSYS, ERROR_FIXME);
 #if 0
@@ -737,7 +754,10 @@ static int procfds(struct proc *p, char *va, int count, long offset)
 #endif
 static void procclose(struct chan *c)
 {
-	if (QID(c->qid) == Qtrace) {
+	struct strace *s;
+
+	switch (QID(c->qid)) {
+	case Qtrace:
 		spin_lock(&tlock);
 		if (topens > 0)
 			topens--;
@@ -746,19 +766,23 @@ static void procclose(struct chan *c)
 		   proctrace = notrace;
 		 */
 		spin_unlock(&tlock);
-	}
-	if (QID(c->qid) == Qsyscall) {
+		break;
+	case Qns:
+		if (c->aux)
+			kfree(c->aux);
+		break;
+	case Qsyscall:
 		if (c->aux)
 			qclose(c->aux);
 		c->aux = NULL;
-	}
-	if (QID(c->qid) == Qns && c->aux != 0)
-		kfree(c->aux);
-	if (QID(c->qid) == Qstrace && c->aux != 0) {
-		struct strace *s = c->aux;
-
-		kref_put(&s->users);
-		c->aux = NULL;
+		break;
+	case Qstrace:
+		if (c->aux) {
+			s = c->aux;
+			kref_put(&s->users);
+			c->aux = NULL;
+		}
+		break;
 	}
 }
 

@@ -408,6 +408,7 @@ error_t proc_alloc(struct proc **pp, struct proc *parent, int flags)
 	p->ucq_hashlock = (struct hashlock*)&p->ucq_hl_noref;
 	hashlock_init_irqsave(p->ucq_hashlock, HASHLOCK_DEFAULT_SZ);
 
+	qlock_init(&p->debug);
 	atomic_inc(&num_envs);
 	frontend_proc_init(p);
 	plan9setup(p, parent, flags);
