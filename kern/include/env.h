@@ -116,6 +116,10 @@ struct proc {
 	struct cv_lookup_tailq		abortable_sleepers;
 	spinlock_t					abort_list_lock;
 
+	/* Debugging communication channel. */
+	struct chan *debug_pipe;
+	qlock_t debug;
+
 	/* VMMCP */
 	struct vmm vmm;
 
