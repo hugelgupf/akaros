@@ -207,10 +207,7 @@ static void queue_read_handler(struct event_queue *ev_q)
 
 void d9s_init(struct d9_ops *dops)
 {
-	int fd;
-	int p[2];
 	char buf[60];
-	int ret;
 
 	/* Set up parlib queue for asynchronous read notifications. */
 	debug_read_ev_q = get_eventq(EV_MBOX_UCQ);
@@ -221,25 +218,11 @@ void d9s_init(struct d9_ops *dops)
 	/* Set d9 ops. */
 	d9_ops = dops;
 
-	/* Open a pipe and post it in #srv.
-	 * TODO(chrisko): add special file #proc/PID/debug that works like #srv.
-	 */
-	ret = pipe(p);
-	if (ret < 0)
-		panic("could not get pipe.");
-
-	snprintf(buf, sizeof(buf), "#srv/debug-%d", getpid());
-	fd = open(buf, O_WRONLY | O_CREAT, 0666);
-	if (fd < 0)
+	snprintf(buf, sizeof(buf), "#proc/%d/debug", getpid());
+	debug_fd = open(buf, O_RDWR, 0666);
+	if (debug_fd < 0)
 		panic("could not open debug file.");
 
-	snprintf(buf, sizeof(buf), "%d", p[1]);
-	if (write(fd, buf, strlen(buf)) != strlen(buf))
-		panic("could not write fd to debug file.");
-
-	close(p[1]);
-
-	debug_fd = p[0];
 	debug_read(debug_fd, async_read_buf, sizeof(struct d9_header));
 }
 
@@ -829,15 +812,8 @@ int d9c_resume(int fd, uint64_t tid, bool singlestep)
 int d9c_attach(unsigned long pid)
 {
 	char buf[60];
-	int debug_fd;
-
-	/* TODO(chrisko): #proc/pid/debug */
-	snprintf(buf, sizeof(buf), "#srv/debug-%lu", pid);
-	/* Just retry that for now. */
-	while ((debug_fd = open(buf, O_RDWR)) == -1)
-		sys_block(100);
-
-	return debug_fd;
+	snprintf(buf, sizeof(buf), "#proc/%lu/debug", pid);
+	return open(buf, O_RDWR);
 }
 
 int d9c_init(int fd, struct d9c_ops *ops)
