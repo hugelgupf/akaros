@@ -212,7 +212,7 @@ void d9s_init(struct d9_ops *dops)
 	/* Set up parlib queue for asynchronous read notifications. */
 	debug_read_ev_q = get_eventq(EV_MBOX_UCQ);
 	debug_read_ev_q->ev_flags =
-	    EVENT_IPI | EVENT_INDIR | EVENT_SPAM_INDIR | EVENT_WAKEUP;
+	    EVENT_IPI | EVENT_SPAM_INDIR | EVENT_INDIR | EVENT_WAKEUP;
 	debug_read_ev_q->ev_handler = queue_read_handler;
 
 	/* Set d9 ops. */
@@ -316,6 +316,7 @@ int d9s_store_memory(const struct d9_tstoremem_msg *req)
 /* d9s_resume is the d9_ops func called to fulfill a TRESUME request. */
 void d9s_resume(struct uthread *t, bool singlestep)
 {
+	toggle_debug_stopped(false);
 	if (t) {
 		/* Only single-step if a specific thread was specified. */
 		if (singlestep)
@@ -353,6 +354,7 @@ int d9s_notify_add_thread(uint64_t tid)
 	if (!atomic_read(&debugged))
 		return 0;
 
+	printf("notifying for thread %d\n", tid);
 	tat.msg.pid = getpid();
 	tat.msg.tid = tid;
 
@@ -364,6 +366,11 @@ void notify_thread(struct uthread *t)
 	(void)d9s_notify_add_thread(t->id);
 }
 
+void print_thread(struct uthread *t)
+{
+	printf("THREAD %u\n", t->id);
+}
+
 static int d9s_tinit(struct d9_header *hdr)
 {
 	uint64_t tid;
@@ -373,13 +380,15 @@ static int d9s_tinit(struct d9_header *hdr)
 	if (!atomic_cas(&debugged, 0, 1))
 		return debug_send_error(EBADF /* TODO */);
 
-	uthread_apply_all(notify_thread);
-
 	if ((tid = atomic_read(&last_breakpoint_tid)) > 0) {
 		t = uthread_get_thread_by_id(tid);
 		d9s_notify_hit_breakpoint(tid, get_user_ctx_pc(&t->u_ctx));
 		uthread_put_thread(t);
 	}
+
+	uthread_apply_all(notify_thread);
+
+	uthread_apply_all(print_thread);
 
 	return debug_send_packet(debug_fd, &(resp.hdr));
 }
@@ -825,4 +834,64 @@ int d9c_init(int fd, struct d9c_ops *ops)
 	sync_cv = uth_cond_var_alloc();
 
 	return debug_send_and_block(fd, &(req.hdr), NULL, NULL);
+}
+
+static int stop_world_queue_handle_one_msg(struct event_mbox *ev_mbox);
+static void stop_world_queue_read_handler(struct event_queue *ev_q);
+static void handle_stopped_world(struct syscall *sysc);
+static struct event_queue *stop_world_ev_q;
+static struct syscall stop_world_sysc;
+
+static void handle_stopped_world(struct syscall *sysc)
+{
+	// Stop my world syscall has completed, and here we are, with one core!
+	assert(sysc->num == SYS_stop_my_world);
+	struct uthread *t = (struct uthread *)sysc->u_data;
+
+	printf("foo\n");
+	toggle_debug_stopped(true);
+	d9s_notify_hit_breakpoint(t->id, get_user_ctx_pc(&t->u_ctx));
+}
+
+void stop_my_world(struct uthread *t)
+{
+	/* Set up parlib queue for asynchronous stop_my_world notifs. */
+	stop_world_ev_q = get_eventq(EV_MBOX_UCQ);
+	stop_world_ev_q->ev_flags =
+	    EVENT_IPI | EVENT_SPAM_INDIR | EVENT_INDIR | EVENT_WAKEUP;
+	stop_world_ev_q->ev_handler = stop_world_queue_read_handler;
+
+	stop_world_sysc.u_data = t;
+	syscall_async(&stop_world_sysc, SYS_stop_my_world);
+
+	if (!register_evq(&stop_world_sysc, stop_world_ev_q))
+		handle_stopped_world(&stop_world_sysc);
+	sys_yield(false);
+}
+
+/* queue_handle_one_message extracts one message from the mbox and calls the
+ * appropriate handler for that message. */
+static int stop_world_queue_handle_one_msg(struct event_mbox *ev_mbox)
+{
+	struct event_msg msg;
+	struct syscall *sysc;
+
+	if (!extract_one_mbox_msg(ev_mbox, &msg))
+		return 0;
+
+	assert(msg.ev_type == EV_SYSCALL);
+	sysc = msg.ev_arg3;
+	assert(sysc);
+	handle_stopped_world(sysc);
+	return 1;
+}
+
+/* queue_read_handler is the event queue handler for the async read evq. */
+static void stop_world_queue_read_handler(struct event_queue *ev_q)
+{
+	assert(ev_q);
+	assert(ev_q->ev_mbox);
+
+	while (stop_world_queue_handle_one_msg(ev_q->ev_mbox))
+		;
 }

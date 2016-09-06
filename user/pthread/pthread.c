@@ -17,6 +17,7 @@
 #include <parlib/ucq.h>
 #include <parlib/signal.h>
 #include <parlib/arch/trap.h>
+#include <parlib/debug.h>
 
 struct pthread_queue ready_queue = TAILQ_HEAD_INITIALIZER(ready_queue);
 struct pthread_queue active_queue = TAILQ_HEAD_INITIALIZER(active_queue);
@@ -305,6 +306,13 @@ static void pth_thread_refl_hw_fault(struct uthread *uthread,
 		break;
 	case HW_TRAP_PAGE_FAULT:
 		handle_page_fault(uthread, err, aux);
+		break;
+	case HW_TRAP_BRKPT:
+	case HW_TRAP_DEBUG:
+		printf("STOPPING THE WORLD\n");
+		stop_my_world(uthread);
+		/* stop_my_world should not return. */
+		//assert(0);
 		break;
 	default:
 		printf("Pthread has unhandled fault: %d, err: %d, aux: %p\n",

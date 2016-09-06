@@ -1486,6 +1486,13 @@ static int sys_vmm_poke_guest(struct proc *p, int guest_pcoreid)
 	return vmm_poke_guest(p, guest_pcoreid);
 }
 
+static int sys_stop_my_world(struct proc *p)
+{
+	/* Bulk-preempt process p. */
+	proc_preempt_all(p, 1000000);
+	return 0;
+}
+
 /* Pokes the ksched for the given resource for target_pid.  If the target pid
  * == 0, we just poke for the calling process.  The common case is poking for
  * self, so we avoid the lookup.
@@ -2591,6 +2598,7 @@ const struct sys_table_entry syscall_table[] = {
 	[SYS_populate_va] = {(syscall_t)sys_populate_va, "populate_va"},
 	[SYS_nanosleep] = {(syscall_t)sys_nanosleep, "nanosleep"},
 	[SYS_pop_ctx] = {(syscall_t)sys_pop_ctx, "pop_ctx"},
+	[SYS_stop_my_world] = {(syscall_t)sys_stop_my_world, "stop_my_world"},
 
 	[SYS_read] = {(syscall_t)sys_read, "read"},
 	[SYS_write] = {(syscall_t)sys_write, "write"},

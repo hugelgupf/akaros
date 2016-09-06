@@ -43,6 +43,12 @@ static void handle_vc_indir(struct event_msg *ev_msg, unsigned int ev_type,
                             void *data);
 static void __ros_uth_syscall_blockon(struct syscall *sysc);
 
+static atomic_t debug_stopped;
+void toggle_debug_stopped(bool d)
+{
+	atomic_swap(&debug_stopped, d);
+}
+
 /* Helper, initializes a fresh uthread to be thread0. */
 static void uthread_init_thread0(struct uthread *uthread)
 {
@@ -293,11 +299,20 @@ void __attribute__((noreturn)) uthread_vcore_entry(void)
 	 * to do this after we've handled STEALING and DONT_MIGRATE. */
 	try_handle_remote_mbox();
 	/* Otherwise, go about our usual vcore business (messages, etc). */
-	handle_events(vcoreid);
-	__check_preempt_pending(vcoreid);
-	assert(in_vcore_context());	/* double check, in case an event changed it */
-	sched_ops->sched_entry();
-	assert(0); /* 2LS sched_entry should never return */
+	while (1) {
+		handle_events(vcoreid);
+		__check_preempt_pending(vcoreid);
+		assert(in_vcore_context());	/* double check, in case an event changed it */
+
+		if (!atomic_read(&debug_stopped)) {
+			sched_ops->sched_entry();
+			assert(0); /* 2LS sched_entry should never return */
+		} else {
+			sys_yield(false);
+		}
+	}
+
+	assert(0);
 }
 
 /* Does the uthread initialization of a uthread that the caller created.  Call

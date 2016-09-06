@@ -114,6 +114,7 @@ void uthread_apply_all(void (*fn)(struct uthread *));
 bool __check_preempt_pending(uint32_t vcoreid);	/* careful: check the code */
 void uth_disable_notifs(void);
 void uth_enable_notifs(void);
+void toggle_debug_stopped(bool d);
 
 /* Helpers, which the 2LS can call */
 void __block_uthread_on_async_sysc(struct uthread *uth);

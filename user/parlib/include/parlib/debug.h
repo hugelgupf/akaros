@@ -226,3 +226,5 @@ int d9c_fetch_registers(int fd, uint64_t tid, struct d9_regs *regs);
 int d9c_store_registers(int fd, uint64_t tid, struct d9_regs *regs);
 int d9c_resume(int fd, uint64_t tid, bool singlestep);
 int d9c_init(int fd, struct d9c_ops *ops);
+
+void stop_my_world(struct uthread *t);

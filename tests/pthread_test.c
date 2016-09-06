@@ -23,8 +23,8 @@ pthread_cond_t dummy_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t dummy_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-#define printf_safe(...) {}
-//#define printf_safe(...) \
+//#define printf_safe(...) {}
+#define printf_safe(...) \
 	pthread_mutex_lock(&lock); \
 	printf(__VA_ARGS__); \
 	pthread_mutex_unlock(&lock);
@@ -100,6 +100,9 @@ int main(int argc, char** argv)
 		if (pthread_create(&my_threads[i], NULL, &yield_thread, NULL))
 			perror("pth_create failed");
 	}
+
+	asm("int $3;");
+
 	if (gettimeofday(&start_tv, 0))
 		perror("Start time error...");
 	ready = TRUE;			/* signal to any spinning uthreads to start */
